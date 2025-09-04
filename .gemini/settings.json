@@ -1,0 +1,8 @@
+{
+    "mcpServers": [
+      {
+        "name": "playwright-server",
+        "url": "http://localhost:8080" // Replace with the actual address and port of your Playwright MCP server
+      }
+    ]
+  }
