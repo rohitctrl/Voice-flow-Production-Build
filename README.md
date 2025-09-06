@@ -1,4 +1,4 @@
-# Voiceflow V2 - Complete AI-Powered Transcription Platform
+# Voiceflow - Complete AI-Powered Transcription Platform
 
 A full-featured transcription application with authentication, subscription billing, project management, and comprehensive audio processing capabilities powered by AssemblyAI.
 
