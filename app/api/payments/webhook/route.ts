@@ -15,7 +15,7 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text()
-    const headersList = headers()
+    const headersList = await headers()
     const signature = headersList.get('x-razorpay-signature')
 
     if (!signature) {
@@ -181,7 +181,7 @@ async function handlePaymentFailed(event: WebhookEvent) {
   // If this is a subscription payment, handle subscription failure
   if (payment.notes?.subscriptionId) {
     await updateUserSubscriptionByRazorpayId(payment.notes.subscriptionId, {
-      status: 'past_due',
+      status: 'halted',
     })
   }
 }

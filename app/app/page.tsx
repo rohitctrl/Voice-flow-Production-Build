@@ -29,7 +29,12 @@ const Dashboard = () => {
       </h1>
       <p style={{ color: 'white' }}>This is a test message to see if the page renders.</p>
       <p style={{ color: 'white' }}>Session status: {status}</p>
-      <p style={{ color: 'white' }}>User: {JSON.stringify(session?.user, null, 2)}</p>
+      <div style={{ color: 'white' }}>
+        <p><strong>User Details:</strong></p>
+        <p>Name: {session?.user?.name}</p>
+        <p>Email: {session?.user?.email}</p>
+        {session?.user?.image && <p>Profile Image: <img src={session.user.image} alt="Profile" style={{ width: '40px', height: '40px', borderRadius: '50%', marginLeft: '10px' }} /></p>}
+      </div>
     </div>
   );
 };

@@ -30,8 +30,7 @@ import {
   SortAsc,
   SortDesc,
   Grid3X3,
-  List,
-  Plus
+  List
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getUserTranscriptions, deleteTranscription, updateTranscription } from '@/lib/database';
@@ -347,15 +346,6 @@ const TranscriptionsPage = () => {
               Manage and organize all your transcribed content
             </p>
           </div>
-          <motion.a
-            href="/app/upload"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-200"
-          >
-            <Plus className="h-5 w-5" />
-            New Transcription
-          </motion.a>
         </div>
 
         {/* Stats */}
@@ -528,20 +518,9 @@ const TranscriptionsPage = () => {
             <p className="text-gray-400 mb-6">
               {searchTerm || filterBy !== 'all' 
                 ? 'Try adjusting your search or filters'
-                : 'Upload your first audio file to get started!'
+                : 'No transcriptions available yet.'
               }
             </p>
-            {!searchTerm && filterBy === 'all' && (
-              <motion.a
-                href="/app/upload"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-200"
-              >
-                <Plus className="h-5 w-5" />
-                Create First Transcription
-              </motion.a>
-            )}
           </div>
         ) : (
           <div className="space-y-4">

@@ -1,4 +1,4 @@
-# Voiceflow V2 - Complete AI-Powered Transcription Platform
+# Voice-flow - Complete AI-Powered Transcription Platform
 
 A full-featured transcription application with authentication, subscription billing, project management, and comprehensive audio processing capabilities powered by AssemblyAI.
 
@@ -319,7 +319,7 @@ Visit [http://localhost:3000](http://localhost:3000) to access the application.
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd voiceflow-v2
+cd voice-flow
 
 # Install dependencies
 npm install
@@ -352,10 +352,10 @@ vercel --prod
 #### Docker Deployment
 ```bash
 # Build Docker image
-docker build -t voiceflow-v2 .
+docker build -t voice-flow .
 
 # Run with environment variables
-docker run -p 3000:3000 --env-file .env.local voiceflow-v2
+docker run -p 3000:3000 --env-file .env.local voice-flow
 ```
 
 ### Environment Variables Checklist
@@ -466,4 +466,4 @@ docker run -p 3000:3000 --env-file .env.local voiceflow-v2
 
 **Built with ❤️ for the future of voice technology. Ready for production deployment!**
 
-*Voiceflow V2 - Transforming audio into actionable insights with enterprise-grade security and scalability.*
+*Voice-flow - Transforming audio into actionable insights with enterprise-grade security and scalability.*

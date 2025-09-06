@@ -9,7 +9,6 @@ import {
   Settings, 
   FolderOpen, 
   Search,
-  PlusCircle,
   ChevronLeft,
   ChevronRight,
   Zap,
@@ -20,6 +19,7 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Switch from '@/components/ui/toggle-switch';
 
 interface AppSidebarProps {
   currentPath?: string;
@@ -37,13 +37,6 @@ export const AppSidebar = ({ currentPath = '/app' }: AppSidebarProps) => {
       href: '/app',
       description: 'Overview & recent activity',
       color: 'from-gray-700 to-gray-800'
-    },
-    { 
-      icon: Mic, 
-      label: 'Upload', 
-      href: '/app/upload',
-      description: 'Upload & transcribe audio',
-      color: 'from-blue-500 to-gray-800'
     },
     { 
       icon: FileText, 
@@ -125,33 +118,33 @@ export const AppSidebar = ({ currentPath = '/app' }: AppSidebarProps) => {
               )}
             </motion.div>
             
-            <button
-              onClick={toggleCollapsed}
-              className="p-2 hover:bg-gray-800/50 rounded-lg transition-colors duration-200"
-            >
-              {isCollapsed ? (
-                <ChevronRight className="h-5 w-5 text-gray-400" />
-              ) : (
-                <ChevronLeft className="h-5 w-5 text-gray-400" />
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleCollapsed}
+                className="p-2 hover:bg-gray-800/50 rounded-lg transition-colors duration-200"
+              >
+                {isCollapsed ? (
+                  <ChevronRight className="h-5 w-5 text-gray-400" />
+                ) : (
+                  <ChevronLeft className="h-5 w-5 text-gray-400" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Quick Record Button */}
-        <div className="p-4 border-b border-gray-700/50">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className={cn(
-              "w-full flex items-center gap-3 p-3 bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-800 hover:to-gray-800 text-white font-semibold rounded-xl shadow-lg transition-all duration-300",
-              isCollapsed && "justify-center"
-            )}
-          >
-            <PlusCircle className="h-5 w-5" />
-            {!isCollapsed && <span>Quick Record</span>}
-          </motion.button>
-        </div>
+        {/* Theme Toggle */}
+        {!isCollapsed && (
+          <div className="px-6 py-3 border-b border-gray-700/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="text-white text-sm font-medium">Theme</div>
+              </div>
+              <Switch />
+            </div>
+          </div>
+        )}
+
 
         {/* Navigation */}
         <nav className="flex-1 p-4">

@@ -5,55 +5,7 @@ import { createServerSupabaseClient } from './supabase-server'
 // Storage bucket for audio files
 const AUDIO_BUCKET = 'audio-files'
 
-export interface UploadResult {
-  url: string
-  path: string
-  fullPath: string
-}
 
-// Upload audio file to Supabase Storage with proper authentication
-export async function uploadAudioFile(
-  file: File,
-  userId: string,
-  transcriptionId?: string
-): Promise<UploadResult> {
-  try {
-    // Generate unique filename
-    const fileExt = file.name.split('.').pop()
-    const fileName = transcriptionId 
-      ? `${transcriptionId}.${fileExt}`
-      : `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-    
-    const filePath = `${userId}/${fileName}`
-
-    // Use admin client for storage operations with user validation
-    // The userId is validated at the API level, so this is secure
-    const { data, error } = await supabaseAdmin.storage
-      .from(AUDIO_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      })
-
-    if (error) {
-      throw new Error(`Upload failed: ${error.message}`)
-    }
-
-    // Get public URL using admin client
-    const { data: { publicUrl } } = supabaseAdmin.storage
-      .from(AUDIO_BUCKET)
-      .getPublicUrl(filePath)
-
-    return {
-      url: publicUrl,
-      path: filePath,
-      fullPath: data.path
-    }
-  } catch (error) {
-    console.error('Error uploading file:', error)
-    throw error
-  }
-}
 
 // Delete audio file from storage
 export async function deleteAudioFile(filePath: string): Promise<boolean> {
@@ -191,44 +143,6 @@ export function isVideoFile(filename: string): boolean {
   return videoExtensions.includes(extension)
 }
 
-// Batch upload for multiple files
-export async function uploadMultipleFiles(
-  files: File[],
-  userId: string,
-  onProgress?: (progress: { completed: number; total: number; currentFile: string }) => void
-): Promise<UploadResult[]> {
-  const results: UploadResult[] = []
-  
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i]
-    
-    if (onProgress) {
-      onProgress({
-        completed: i,
-        total: files.length,
-        currentFile: file.name
-      })
-    }
-
-    try {
-      const result = await uploadAudioFile(file, userId)
-      results.push(result)
-    } catch (error) {
-      console.error(`Failed to upload ${file.name}:`, error)
-      // Continue with other files even if one fails
-    }
-  }
-
-  if (onProgress) {
-    onProgress({
-      completed: files.length,
-      total: files.length,
-      currentFile: ''
-    })
-  }
-
-  return results
-}
 
 // Cleanup old files (for maintenance)
 export async function cleanupOldFiles(userId: string, daysOld = 30): Promise<number> {

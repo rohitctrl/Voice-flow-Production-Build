@@ -119,13 +119,26 @@ export async function createRazorpaySubscription(
   notes?: Record<string, any>
 ) {
   try {
+    // Fetch customer details first
+    const customer = await razorpay.customers.fetch(customerId)
+    
     const subscription = await razorpay.subscriptions.create({
       plan_id: planId,
-      customer_id: customerId,
-      total_count: totalCount, // Number of billing cycles
+      customer_notify: 1, // 1 = notify customer, 0 = don't notify
+      total_count: totalCount ?? 0, // Number of billing cycles, default to 0 for indefinite
+      quantity: 1, // Default quantity
       addons,
-      notes,
-    })
+      notes: {
+        ...notes,
+        customer_id: customerId, // Store customer ID in notes for reference
+      },
+      // Add customer details for subscription
+      customer: {
+        name: customer.name,
+        email: customer.email,
+        contact: customer.contact,
+      },
+    } as any) // Type assertion to handle type mismatch
     return subscription
   } catch (error) {
     console.error('Error creating Razorpay subscription:', error)

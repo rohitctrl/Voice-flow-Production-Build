@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { motion } from 'framer-motion';
-import { FileText, GraduationCap, Lightbulb, Phone, Headphones, CheckSquare, Building2, Users } from 'lucide-react';
+import { FileText, GraduationCap, Lightbulb, Phone, Headphones, CheckSquare } from 'lucide-react';
 
 export const UseCasesSection = () => {
   const useCases = [
@@ -55,12 +55,6 @@ export const UseCasesSection = () => {
     }
   ];
 
-  const industries = [
-    { icon: Building2, name: "Business", users: "5k+" },
-    { icon: GraduationCap, name: "Education", users: "3k+" },
-    { icon: Users, name: "Healthcare", users: "1k+" },
-    { icon: FileText, name: "Legal", users: "800+" }
-  ];
 
   return (
     <section className="py-20 px-6 bg-black relative">
@@ -119,65 +113,6 @@ export const UseCasesSection = () => {
           ))}
         </div>
 
-        {/* Industries Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          viewport={{ once: true }}
-          className="bg-gradient-to-r from-gray-900/50 to-gray-800/50 rounded-2xl p-8 border border-gray-700/50"
-        >
-          <div className="text-center mb-8">
-            <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">
-              Trusted by Professionals Across Industries
-            </h3>
-            <p className="text-gray-300">
-              Join thousands of professionals who rely on Voiceflow daily
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {industries.map((industry, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                className="text-center p-4 rounded-xl bg-black/20 border border-gray-700/30"
-              >
-                <div className="w-12 h-12 bg-gray-700/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <industry.icon className="h-6 w-6 text-white" />
-                </div>
-                <h4 className="text-white font-semibold mb-1">
-                  {industry.name}
-                </h4>
-                <p className="text-white text-sm font-medium">
-                  {industry.users} users
-                </p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* CTA Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          viewport={{ once: true }}
-          className="text-center mt-16"
-        >
-          <h3 className="text-2xl font-bold text-white mb-4">
-            Ready to Transform Your Workflow?
-          </h3>
-          <p className="text-gray-400 mb-6">
-            Start with our free tier - no credit card required
-          </p>
-          <button className="px-8 py-4 bg-gray-700 hover:bg-gray-800 text-white font-bold rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105">
-            Get Started Free
-          </button>
-        </motion.div>
       </div>
     </section>
   );
