@@ -4,7 +4,6 @@ import { BenefitsSection } from "@/components/ui/benefits-section";
 import { UseCasesSection } from "@/components/ui/use-cases-section";
 import { FeaturesSection } from "@/components/ui/features-section";
 import { PricingSection } from "@/components/ui/pricing-section";
-import { TestimonialsSection } from "@/components/ui/testimonials-section";
 import { FinalCTASection } from "@/components/ui/final-cta-section";
 import { FloatingRecordButton } from "@/components/ui/floating-record-button";
 
@@ -27,7 +26,6 @@ export default function Home() {
       <BenefitsSection />
       <UseCasesSection />
       <PricingSection />
-      <TestimonialsSection />
       <FinalCTASection />
       <FloatingRecordButton />
     </main>

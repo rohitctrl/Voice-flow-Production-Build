@@ -22,9 +22,8 @@ export const config = {
       if (isOnApp) {
         if (isLoggedIn) return true
         return false // Redirect unauthenticated users to login page
-      } else if (isLoggedIn) {
-        return Response.redirect(new URL('/app', nextUrl))
       }
+      // Allow both logged in and logged out users to access the landing page
       return true
     },
     jwt({ token, user }) {

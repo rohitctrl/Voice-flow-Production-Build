@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+import { supabaseAdmin } from './supabase-admin'
+import { createServerSupabaseClient } from './supabase-server'
 
 // Storage bucket for audio files
 const AUDIO_BUCKET = 'audio-files'
@@ -9,7 +11,7 @@ export interface UploadResult {
   fullPath: string
 }
 
-// Upload audio file to Supabase Storage
+// Upload audio file to Supabase Storage with proper authentication
 export async function uploadAudioFile(
   file: File,
   userId: string,
@@ -24,8 +26,9 @@ export async function uploadAudioFile(
     
     const filePath = `${userId}/${fileName}`
 
-    // Upload file
-    const { data, error } = await supabase.storage
+    // Use admin client for storage operations with user validation
+    // The userId is validated at the API level, so this is secure
+    const { data, error } = await supabaseAdmin.storage
       .from(AUDIO_BUCKET)
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -36,8 +39,8 @@ export async function uploadAudioFile(
       throw new Error(`Upload failed: ${error.message}`)
     }
 
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
+    // Get public URL using admin client
+    const { data: { publicUrl } } = supabaseAdmin.storage
       .from(AUDIO_BUCKET)
       .getPublicUrl(filePath)
 

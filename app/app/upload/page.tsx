@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession } from 'next-auth/react';
 import { 
@@ -48,6 +48,7 @@ const UploadPage = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [selectedProject, setSelectedProject] = useState('');
+  const [microphoneAccess, setMicrophoneAccess] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
   const [transcriptionSettings, setTranscriptionSettings] = useState({
     language: 'en',
     speakerDiarization: true,
@@ -58,6 +59,9 @@ const UploadPage = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recordingTimeRef = useRef<NodeJS.Timeout | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   const projects = [
     'Product Team Meetings',
@@ -70,6 +74,47 @@ const UploadPage = () => {
   const supportedFormats = [
     'MP3', 'WAV', 'M4A', 'FLAC', 'OGG', 'WMA', 'AAC', 'MP4', 'MOV', 'AVI', 'MKV'
   ];
+
+  // Check microphone permissions on mount
+  useEffect(() => {
+    const checkMicrophoneAccess = async () => {
+      try {
+        if (navigator.permissions && navigator.permissions.query) {
+          const result = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          setMicrophoneAccess(result.state);
+          
+          result.addEventListener('change', () => {
+            setMicrophoneAccess(result.state);
+          });
+        }
+      } catch (error) {
+        console.log('Permission API not supported');
+        setMicrophoneAccess('unknown');
+      }
+    };
+    
+    checkMicrophoneAccess();
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Stop recording if active
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      
+      // Stop all tracks
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
+      // Clear timer
+      if (recordingTimeRef.current) {
+        clearInterval(recordingTimeRef.current);
+      }
+    };
+  }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -137,15 +182,21 @@ const UploadPage = () => {
         ));
       }, 200);
 
+      console.log('Starting upload request to /api/upload');
       const uploadResponse = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
 
       clearInterval(uploadProgressInterval);
+      
+      console.log('Upload response status:', uploadResponse.status);
+      console.log('Upload response headers:', uploadResponse.headers);
 
       if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+        const errorText = await uploadResponse.text();
+        console.error('Upload failed with response:', errorText);
+        throw new Error(`Upload failed: ${uploadResponse.statusText} - ${errorText}`);
       }
 
       const uploadResult = await uploadResponse.json();
@@ -209,32 +260,98 @@ const UploadPage = () => {
           ? { 
               ...file, 
               status: 'error', 
-              error: error.message || 'Failed to process file'
+              error: error instanceof Error ? error.message : 'Failed to process file'
             }
           : file
       ));
     }
   };
 
-  const startRecording = () => {
-    setIsRecording(true);
-    setRecordingTime(0);
-    
-    recordingTimeRef.current = setInterval(() => {
-      setRecordingTime(prev => prev + 1);
-    }, 1000);
+  const startRecording = async () => {
+    try {
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
+
+      streamRef.current = stream;
+      chunksRef.current = [];
+
+      // Create MediaRecorder
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+          ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : 'audio/wav'
+      });
+
+      mediaRecorderRef.current = mediaRecorder;
+
+      // Collect audio data
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
+
+      // Handle recording completion
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(chunksRef.current, { 
+          type: mediaRecorder.mimeType || 'audio/webm'
+        });
+        
+        // Create file from recorded audio
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const extension = mediaRecorder.mimeType?.includes('mp4') ? 'mp4' : 'webm';
+        const recordedFile = new (window as any).File([audioBlob], `Recording_${timestamp}.${extension}`, { 
+          type: mediaRecorder.mimeType || 'audio/webm'
+        });
+
+        handleFiles([recordedFile]);
+        
+        // Cleanup
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
+      };
+
+      // Start recording
+      mediaRecorder.start(1000); // Collect data every second
+      setIsRecording(true);
+      setRecordingTime(0);
+      setMicrophoneAccess('granted');
+      
+      recordingTimeRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      setMicrophoneAccess('denied');
+      alert('Could not access microphone. Please check permissions and try again.');
+    }
   };
 
   const stopRecording = () => {
-    setIsRecording(false);
-    if (recordingTimeRef.current) {
-      clearInterval(recordingTimeRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
     }
     
-    // Create a mock recorded file
-    const mockFile = new File([''], `Recording_${Date.now()}.wav`, { type: 'audio/wav' });
-    handleFiles([mockFile]);
+    setIsRecording(false);
     setRecordingTime(0);
+    
+    if (recordingTimeRef.current) {
+      clearInterval(recordingTimeRef.current);
+      recordingTimeRef.current = null;
+    }
   };
 
   const removeFile = (fileId: string) => {
@@ -356,7 +473,10 @@ const UploadPage = () => {
                 
                 <h3 className="text-white font-semibold mb-2">Record Audio</h3>
                 <p className="text-gray-400 text-sm mb-4">
-                  {isRecording ? `Recording... ${formatTime(recordingTime)}` : 'Click to start recording'}
+                  {isRecording 
+                    ? `Recording... ${formatTime(recordingTime)}` 
+                    : 'Click to record audio directly from your microphone'
+                  }
                 </p>
                 
                 {isRecording && (

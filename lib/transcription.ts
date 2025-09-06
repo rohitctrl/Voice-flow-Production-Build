@@ -94,7 +94,7 @@ export async function getTranscriptionResult(transcriptId: string): Promise<Tran
       id: transcript.id,
       status: transcript.status as any,
       text: transcript.text || undefined,
-      confidence: transcript.confidence,
+      confidence: transcript.confidence || undefined,
       audioUrl: transcript.audio_url,
       error: transcript.error || undefined,
     }
@@ -189,9 +189,9 @@ export async function transcribeAudioFile(
 // Real-time transcription (for streaming audio)
 export async function startRealtimeTranscription() {
   // AssemblyAI real-time transcription setup
-  const rt = client.realtime.createRealtimeTranscriber({
-    sampleRate: 16000,
-  })
+  // This is a placeholder for real-time functionality
+  // Real implementation would use AssemblyAI WebSocket API
+  const rt = null;
 
   return rt
 }

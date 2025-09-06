@@ -35,7 +35,192 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           updated_at?: string
-          subscription_tier?: 'free' | 'pro' | 'business'
+          subscription_tier?: 'free' | 'pro' | 'enterprise'
+        }
+      }
+      subscription_plans: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          price_monthly: number
+          price_yearly: number | null
+          features: any[]
+          limits: Record<string, any>
+          razorpay_plan_id: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          price_monthly: number
+          price_yearly?: number | null
+          features?: any[]
+          limits?: Record<string, any>
+          razorpay_plan_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          price_monthly?: number
+          price_yearly?: number | null
+          features?: any[]
+          limits?: Record<string, any>
+          razorpay_plan_id?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      user_subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          plan_id: string
+          razorpay_subscription_id: string | null
+          razorpay_customer_id: string | null
+          status: 'created' | 'authenticated' | 'active' | 'paused' | 'halted' | 'cancelled' | 'expired'
+          billing_cycle: 'monthly' | 'yearly'
+          current_period_start: string | null
+          current_period_end: string | null
+          trial_start: string | null
+          trial_end: string | null
+          cancelled_at: string | null
+          ended_at: string | null
+          metadata: Record<string, any>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          plan_id: string
+          razorpay_subscription_id?: string | null
+          razorpay_customer_id?: string | null
+          status?: 'created' | 'authenticated' | 'active' | 'paused' | 'halted' | 'cancelled' | 'expired'
+          billing_cycle?: 'monthly' | 'yearly'
+          current_period_start?: string | null
+          current_period_end?: string | null
+          trial_start?: string | null
+          trial_end?: string | null
+          cancelled_at?: string | null
+          ended_at?: string | null
+          metadata?: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          plan_id?: string
+          razorpay_subscription_id?: string | null
+          razorpay_customer_id?: string | null
+          status?: 'created' | 'authenticated' | 'active' | 'paused' | 'halted' | 'cancelled' | 'expired'
+          billing_cycle?: 'monthly' | 'yearly'
+          current_period_start?: string | null
+          current_period_end?: string | null
+          trial_start?: string | null
+          trial_end?: string | null
+          cancelled_at?: string | null
+          ended_at?: string | null
+          metadata?: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      payment_history: {
+        Row: {
+          id: string
+          user_id: string
+          subscription_id: string | null
+          razorpay_payment_id: string | null
+          razorpay_order_id: string | null
+          amount: number
+          currency: string
+          status: 'created' | 'authorized' | 'captured' | 'refunded' | 'failed'
+          method: string | null
+          description: string | null
+          receipt: string | null
+          metadata: Record<string, any>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          subscription_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_order_id?: string | null
+          amount: number
+          currency?: string
+          status?: 'created' | 'authorized' | 'captured' | 'refunded' | 'failed'
+          method?: string | null
+          description?: string | null
+          receipt?: string | null
+          metadata?: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          subscription_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_order_id?: string | null
+          amount?: number
+          currency?: string
+          status?: 'created' | 'authorized' | 'captured' | 'refunded' | 'failed'
+          method?: string | null
+          description?: string | null
+          receipt?: string | null
+          metadata?: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      usage_tracking: {
+        Row: {
+          id: string
+          user_id: string
+          subscription_id: string | null
+          resource_type: string
+          usage_count: number
+          usage_limit: number | null
+          period_start: string
+          period_end: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          subscription_id?: string | null
+          resource_type: string
+          usage_count?: number
+          usage_limit?: number | null
+          period_start: string
+          period_end: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          subscription_id?: string | null
+          resource_type?: string
+          usage_count?: number
+          usage_limit?: number | null
+          period_start?: string
+          period_end?: string
+          created_at?: string
+          updated_at?: string
         }
       }
       projects: {
@@ -131,8 +316,11 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      subscription_tier: 'free' | 'pro' | 'business'
+      subscription_tier: 'free' | 'pro' | 'enterprise'
       transcription_status: 'uploading' | 'processing' | 'completed' | 'error'
+      subscription_status: 'created' | 'authenticated' | 'active' | 'paused' | 'halted' | 'cancelled' | 'expired'
+      payment_status: 'created' | 'authorized' | 'captured' | 'refunded' | 'failed'
+      billing_cycle: 'monthly' | 'yearly'
     }
   }
 }

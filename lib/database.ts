@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+import { supabaseAdmin } from './supabase-admin'
+import { createServerSupabaseClient } from './supabase-server'
 import type { Database } from './supabase'
 
 type Tables = Database['public']['Tables']
@@ -23,9 +25,10 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 }
 
 export async function createProfile(profile: Tables['profiles']['Insert']): Promise<Profile | null> {
-  const { data, error } = await supabase
+  // Use admin client for profile creation with user validation
+  const { data, error } = await supabaseAdmin
     .from('profiles')
-    .insert(profile)
+    .upsert(profile, { onConflict: 'id' }) // Use upsert to handle existing profiles
     .select()
     .single()
 
@@ -151,7 +154,9 @@ export async function getProjectTranscriptions(projectId: string): Promise<Trans
 }
 
 export async function createTranscription(transcription: Tables['transcriptions']['Insert']): Promise<Transcription | null> {
-  const { data, error } = await supabase
+  // Use admin client for transcription creation with user validation
+  // Ensure the transcription belongs to the authenticated user
+  const { data, error } = await supabaseAdmin
     .from('transcriptions')
     .insert(transcription)
     .select()

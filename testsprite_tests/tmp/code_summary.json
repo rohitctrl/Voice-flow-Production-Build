@@ -1,0 +1,98 @@
+{
+  "tech_stack": ["TypeScript", "Next.js 15", "React", "Tailwind CSS", "NextAuth.js", "Supabase", "AssemblyAI"],
+  "features": [
+    {
+      "name": "Authentication System",
+      "description": "OAuth-based authentication using NextAuth.js with Google and GitHub providers",
+      "files": [
+        "lib/auth.ts",
+        "app/api/auth/[...nextauth]/route.ts",
+        "app/auth/signin/page.tsx",
+        "middleware.ts"
+      ]
+    },
+    {
+      "name": "File Upload Interface",
+      "description": "Drag-and-drop file upload interface with audio file support and recording capability",
+      "files": [
+        "app/app/upload/page.tsx",
+        "app/api/upload/route.ts"
+      ]
+    },
+    {
+      "name": "AI Transcription Service",
+      "description": "Speech-to-text transcription using AssemblyAI with speaker diarization and real-time processing",
+      "files": [
+        "app/api/transcribe/route.ts",
+        "lib/transcription.ts"
+      ]
+    },
+    {
+      "name": "Database Layer",
+      "description": "Supabase PostgreSQL integration with RLS policies for user data management",
+      "files": [
+        "lib/database.ts",
+        "lib/supabase.ts",
+        "supabase/schema.sql"
+      ]
+    },
+    {
+      "name": "File Storage System",
+      "description": "Cloud file storage using Supabase Storage for audio files",
+      "files": [
+        "lib/storage.ts"
+      ]
+    },
+    {
+      "name": "Dashboard Interface",
+      "description": "Main dashboard showing user stats, recent transcriptions, and quick actions",
+      "files": [
+        "app/app/page.tsx"
+      ]
+    },
+    {
+      "name": "Transcriptions Management",
+      "description": "Interface for viewing, searching, and managing user transcriptions with filtering and bulk operations",
+      "files": [
+        "app/app/transcriptions/page.tsx"
+      ]
+    },
+    {
+      "name": "Projects Organization",
+      "description": "Project-based organization system for grouping related transcriptions",
+      "files": [
+        "app/app/projects/page.tsx"
+      ]
+    },
+    {
+      "name": "Settings Panel",
+      "description": "User settings and preferences management interface",
+      "files": [
+        "app/app/settings/page.tsx"
+      ]
+    },
+    {
+      "name": "App Layout & Navigation",
+      "description": "Main app layout with sidebar navigation and session management",
+      "files": [
+        "app/app/layout.tsx",
+        "components/ui/app-sidebar.tsx"
+      ]
+    },
+    {
+      "name": "Landing Page",
+      "description": "Marketing landing page with hero section and feature showcase",
+      "files": [
+        "app/page.tsx"
+      ]
+    },
+    {
+      "name": "UI Components",
+      "description": "Reusable UI components and utilities",
+      "files": [
+        "components/ui/app-sidebar.tsx",
+        "lib/utils.ts"
+      ]
+    }
+  ]
+}

@@ -25,68 +25,89 @@ import {
   Download,
   Eye,
   Play,
-  Pause
+  Pause,
+  Plus,
+  X,
+  CheckSquare,
+  Square,
+  AlertCircle,
+  Loader,
+  Grid3X3,
+  List
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getUserProjects, getProjectStats } from '@/lib/database';
+import { getUserProjects, createProject, updateProject, deleteProject, getUserTranscriptions } from '@/lib/database';
+import { exportProjectSummary, downloadBlob, generateExportFilename } from '@/lib/export';
 
 interface Project {
-  id: number;
+  id: string;
   name: string;
-  description: string;
+  description: string | null;
   color: string;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+}
+
+interface ProjectWithStats extends Project {
   transcriptionCount: number;
-  totalDuration: string;
-  lastUpdated: string;
-  createdAt: string;
-  progress: number;
-  status: 'active' | 'completed' | 'paused';
-  members: {
-    id: number;
-    name: string;
-    avatar: string;
-    role: string;
-  }[];
-  recentTranscriptions: {
-    id: number;
-    title: string;
-    date: string;
-    duration: string;
-  }[];
-  tags: string[];
-  starred: boolean;
+  totalDuration: number;
+  lastActivity: string;
 }
 
 const ProjectsPage = () => {
-  const { data: session } = useSession();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterBy, setFilterBy] = useState('all');
-  const [sortBy, setSortBy] = useState('recent');
-  const [viewMode, setViewMode] = useState('grid'); // grid or list
-  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [projects, setProjects] = useState([]);
-  const [stats, setStats] = useState({
-    totalProjects: 0,
-    totalTranscriptions: 0,
-    totalDuration: 0,
-    activeProjects: 0
-  });
+  const { data: session, status } = useSession();
+  const [projects, setProjects] = useState<ProjectWithStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('recent');
+  const [viewMode, setViewMode] = useState('grid');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  
+  // Create/Edit form state
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    color: '#8b5cf6' // Default purple
+  });
+
+  const projectColors = [
+    '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444',
+    '#ec4899', '#6366f1', '#84cc16', '#f97316', '#14b8a6'
+  ];
 
   useEffect(() => {
     async function loadProjects() {
-      if (!session?.user?.id) return;
+      if (!session?.user?.id) {
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true);
-        const [projectsData, projectStats] = await Promise.all([
-          getUserProjects(session.user.id),
-          getProjectStats(session.user.id)
-        ]);
-
-        setProjects(projectsData);
-        setStats(projectStats);
+        const projectsData = await getUserProjects(session.user.id);
+        const transcriptions = await getUserTranscriptions(session.user.id, 1000);
+        
+        // Calculate stats for each project
+        const projectsWithStats: ProjectWithStats[] = projectsData.map(project => {
+          const projectTranscriptions = transcriptions.filter(t => t.project_id === project.id);
+          const totalDuration = projectTranscriptions.reduce((sum, t) => sum + (t.duration || 0), 0);
+          const lastTranscription = projectTranscriptions.sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )[0];
+          
+          return {
+            ...project,
+            transcriptionCount: projectTranscriptions.length,
+            totalDuration,
+            lastActivity: lastTranscription?.created_at || project.updated_at
+          };
+        });
+        
+        setProjects(projectsWithStats);
       } catch (error) {
         console.error('Failed to load projects:', error);
       } finally {
@@ -94,145 +115,190 @@ const ProjectsPage = () => {
       }
     }
 
-    loadProjects();
-  }, [session]);
-
-  // Keep mock data for demo (remove in production)
-  const mockProjects: Project[] = [
-    {
-      id: 1,
-      name: "Product Team Meetings",
-      description: "Weekly team meetings, sprint planning sessions, and product strategy discussions",
-      color: "from-purple-500 to-pink-500",
-      transcriptionCount: 24,
-      totalDuration: "18h 45m",
-      lastUpdated: "2 hours ago",
-      createdAt: "2024-01-01",
-      progress: 85,
-      status: "active",
-      members: [
-        { id: 1, name: "Sarah Chen", avatar: "SC", role: "Product Manager" },
-        { id: 2, name: "Mike Johnson", avatar: "MJ", role: "Developer" },
-        { id: 3, name: "Lisa Wong", avatar: "LW", role: "Designer" }
-      ],
-      recentTranscriptions: [
-        { id: 1, title: "Q4 Planning Session", date: "2 hours ago", duration: "45:23" },
-        { id: 2, title: "Sprint Retrospective", date: "1 day ago", duration: "32:15" },
-        { id: 3, title: "User Feedback Review", date: "2 days ago", duration: "28:47" }
-      ],
-      tags: ["meetings", "planning", "product"],
-      starred: true
-    },
-    {
-      id: 2,
-      name: "Customer Interviews",
-      description: "User research interviews, customer feedback sessions, and usability tests",
-      color: "from-blue-500 to-cyan-500",
-      transcriptionCount: 18,
-      totalDuration: "12h 30m",
-      lastUpdated: "5 hours ago",
-      createdAt: "2024-01-05",
-      progress: 60,
-      status: "active",
-      members: [
-        { id: 4, name: "Dr. Rodriguez", avatar: "DR", role: "Researcher" },
-        { id: 5, name: "Emily Johnson", avatar: "EJ", role: "UX Designer" }
-      ],
-      recentTranscriptions: [
-        { id: 4, title: "Customer Interview #15", date: "5 hours ago", duration: "28:30" },
-        { id: 5, title: "Usability Test Session", date: "1 day ago", duration: "45:12" },
-        { id: 6, title: "Beta User Feedback", date: "3 days ago", duration: "35:08" }
-      ],
-      tags: ["research", "interviews", "feedback"],
-      starred: false
-    },
-    {
-      id: 3,
-      name: "Content Creation",
-      description: "Podcast recordings, video scripts, and content brainstorming sessions",
-      color: "from-green-500 to-emerald-500",
-      transcriptionCount: 35,
-      totalDuration: "28h 15m",
-      lastUpdated: "1 day ago",
-      createdAt: "2023-12-15",
-      progress: 92,
-      status: "active",
-      members: [
-        { id: 6, name: "James Kumar", avatar: "JK", role: "Creator" },
-        { id: 7, name: "Maria Gonzalez", avatar: "MG", role: "Editor" },
-        { id: 8, name: "Alex Thompson", avatar: "AT", role: "Producer" }
-      ],
-      recentTranscriptions: [
-        { id: 7, title: "Podcast Episode 25", date: "1 day ago", duration: "52:33" },
-        { id: 8, title: "Video Script Review", date: "2 days ago", duration: "25:14" },
-        { id: 9, title: "Content Planning Meeting", date: "4 days ago", duration: "38:45" }
-      ],
-      tags: ["podcast", "content", "creative"],
-      starred: true
-    },
-    {
-      id: 4,
-      name: "Legal Documentation",
-      description: "Legal meetings, client consultations, and deposition transcriptions",
-      color: "from-gray-600 to-gray-700",
-      transcriptionCount: 12,
-      totalDuration: "15h 22m",
-      lastUpdated: "3 days ago",
-      createdAt: "2024-01-10",
-      progress: 40,
-      status: "paused",
-      members: [
-        { id: 9, name: "Jennifer Law", avatar: "JL", role: "Attorney" },
-        { id: 10, name: "Robert Smith", avatar: "RS", role: "Paralegal" }
-      ],
-      recentTranscriptions: [
-        { id: 10, title: "Client Consultation #5", date: "3 days ago", duration: "1:15:30" },
-        { id: 11, title: "Case Strategy Meeting", date: "5 days ago", duration: "45:22" },
-        { id: 12, title: "Deposition Review", date: "1 week ago", duration: "2:05:15" }
-      ],
-      tags: ["legal", "confidential", "documentation"],
-      starred: false
-    },
-    {
-      id: 5,
-      name: "Training Sessions",
-      description: "Employee onboarding, workshop recordings, and training materials",
-      color: "from-orange-500 to-red-500",
-      transcriptionCount: 8,
-      totalDuration: "6h 45m",
-      lastUpdated: "1 week ago",
-      createdAt: "2023-12-20",
-      progress: 100,
-      status: "completed",
-      members: [
-        { id: 11, name: "David Wilson", avatar: "DW", role: "Trainer" },
-        { id: 12, name: "Anna Martinez", avatar: "AM", role: "HR Manager" }
-      ],
-      recentTranscriptions: [
-        { id: 13, title: "New Employee Orientation", date: "1 week ago", duration: "1:30:00" },
-        { id: 14, title: "Skills Workshop", date: "2 weeks ago", duration: "2:15:30" },
-        { id: 15, title: "Team Building Session", date: "3 weeks ago", duration: "1:45:15" }
-      ],
-      tags: ["training", "onboarding", "workshops"],
-      starred: false
+    if (status !== 'loading') {
+      loadProjects();
     }
-  ];
+  }, [session, status]);
 
-  // Use real data if available, fallback to mock for demo
-  const displayProjects = projects.length > 0 ? projects : mockProjects;
+  // Filter and sort projects
+  const filteredProjects = projects
+    .filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           p.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesSearch;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'recent':
+          return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
+        case 'oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'transcriptions':
+          return b.transcriptionCount - a.transcriptionCount;
+        default:
+          return 0;
+      }
+    });
 
-  // Utility functions
-  const formatDurationFromSeconds = (seconds) => {
-    if (!seconds) return '0h 0m';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
+  const handleCreateProject = async () => {
+    if (!session?.user?.id || !formData.name.trim()) return;
+
+    try {
+      const newProject = await createProject({
+        name: formData.name.trim(),
+        description: formData.description.trim() || null,
+        color: formData.color,
+        user_id: session.user.id,
+        is_archived: false
+      });
+
+      if (newProject) {
+        setProjects(prev => [{
+          ...newProject,
+          transcriptionCount: 0,
+          totalDuration: 0,
+          lastActivity: newProject.created_at
+        }, ...prev]);
+        
+        setShowCreateModal(false);
+        setFormData({ name: '', description: '', color: '#8b5cf6' });
+      }
+    } catch (error) {
+      console.error('Failed to create project:', error);
+    }
   };
 
-  const formatRelativeTime = (date) => {
+  const handleEditProject = async () => {
+    if (!editingProject || !formData.name.trim()) return;
+
+    try {
+      const updatedProject = await updateProject(editingProject.id, {
+        name: formData.name.trim(),
+        description: formData.description.trim() || null,
+        color: formData.color
+      });
+
+      if (updatedProject) {
+        setProjects(prev => prev.map(p => 
+          p.id === editingProject.id 
+            ? { ...p, ...updatedProject }
+            : p
+        ));
+        
+        setEditingProject(null);
+        setFormData({ name: '', description: '', color: '#8b5cf6' });
+      }
+    } catch (error) {
+      console.error('Failed to update project:', error);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const confirmDelete = confirm(
+      `Delete "${project.name}"? This will remove the project but keep all transcriptions.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      const success = await deleteProject(projectId);
+      if (success) {
+        setProjects(prev => prev.filter(p => p.id !== projectId));
+        setSelectedItems(prev => {
+          const newSelected = new Set(prev);
+          newSelected.delete(projectId);
+          return newSelected;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+    }
+  };
+
+  const handleSelectItem = (id: string) => {
+    const newSelected = new Set(selectedItems);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedItems.size === filteredProjects.length) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(filteredProjects.map(p => p.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedItems.size === 0) return;
+    
+    const confirmDelete = confirm(`Delete ${selectedItems.size} project(s)?`);
+    if (!confirmDelete) return;
+
+    try {
+      await Promise.all(Array.from(selectedItems).map(id => deleteProject(id)));
+      setProjects(prev => prev.filter(p => !selectedItems.has(p.id)));
+      setSelectedItems(new Set());
+    } catch (error) {
+      console.error('Failed to delete projects:', error);
+    }
+  };
+
+  const openCreateModal = () => {
+    setFormData({ name: '', description: '', color: '#8b5cf6' });
+    setShowCreateModal(true);
+  };
+
+  const openEditModal = (project: Project) => {
+    setFormData({
+      name: project.name,
+      description: project.description || '',
+      color: project.color
+    });
+    setEditingProject(project);
+  };
+
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
+  const handleExportProject = async (project: Project & { transcriptionCount?: number; totalDuration?: number }) => {
+    try {
+      // Get all transcriptions for this project
+      const allTranscriptions = await getUserTranscriptions(session?.user?.id || '', 1000);
+      const projectTranscriptions = allTranscriptions.filter(t => t.project_id === project.id);
+      
+      const projectWithTranscriptions = {
+        ...project,
+        transcriptions: projectTranscriptions
+      };
+      
+      const blob = exportProjectSummary(projectWithTranscriptions);
+      const filename = generateExportFilename(`${project.name}_summary`, 'txt');
+      downloadBlob(blob, filename);
+    } catch (error) {
+      console.error('Failed to export project:', error);
+    }
+  };
+
+  const formatRelativeTime = (dateString: string) => {
     const now = new Date();
-    const time = new Date(date);
-    const diff = now.getTime() - time.getTime();
+    const date = new Date(dateString);
+    const diff = now.getTime() - date.getTime();
     
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
@@ -241,61 +307,26 @@ const ProjectsPage = () => {
     if (minutes < 60) return `${minutes} minutes ago`;
     if (hours < 24) return `${hours} hours ago`;
     if (days === 1) return 'Yesterday';
-    return `${days} days ago`;
+    if (days < 30) return `${days} days ago`;
+    return date.toLocaleDateString();
   };
 
-  const filteredProjects = displayProjects.filter(project => {
-    // Handle both real data and mock data structures
-    const name = project.name || project.title || '';
-    const description = project.description || '';
-    const tags = project.tags || [];
-    
-    const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (Array.isArray(tags) && tags.some(tag => {
-                           const tagName = typeof tag === 'string' ? tag : tag.name;
-                           return tagName.toLowerCase().includes(searchTerm.toLowerCase());
-                         }));
-    
-    const matchesFilter = filterBy === 'all' || 
-                         (filterBy === 'starred' && project.starred) ||
-                         (filterBy === 'active' && project.status === 'active') ||
-                         (filterBy === 'completed' && project.status === 'completed') ||
-                         (filterBy === 'paused' && project.status === 'paused');
-    
-    return matchesSearch && matchesFilter;
-  });
-
-  const toggleSelection = (id) => {
-    setSelectedProjects(prev => 
-      prev.includes(id) 
-        ? prev.filter(item => item !== id)
-        : [...prev, id]
-    );
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'text-green-400 bg-green-400/10';
-      case 'completed': return 'text-blue-400 bg-blue-400/10';
-      case 'paused': return 'text-yellow-400 bg-yellow-400/10';
-      default: return 'text-gray-400 bg-gray-400/10';
-    }
-  };
-
-  const totalStats = {
-    projects: stats.totalProjects || displayProjects.length,
-    transcriptions: stats.totalTranscriptions || displayProjects.reduce((sum, p) => sum + (p.transcriptionCount || 0), 0),
-    totalTime: formatDurationFromSeconds(stats.totalDuration) || "0h 0m",
-    activeProjects: stats.activeProjects || displayProjects.filter(p => p.status === 'active').length
-  };
-
-  if (loading) {
+  if (status === 'loading' || loading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-96">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading your projects...</p>
+          <p className="text-gray-400">Loading projects...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'unauthenticated') {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <p className="text-red-400 text-lg">Please sign in to view projects</p>
         </div>
       </div>
     );
@@ -315,43 +346,57 @@ const ProjectsPage = () => {
               Projects 📁
             </h1>
             <p className="text-gray-400 text-lg">
-              Organize your transcriptions into collaborative projects
+              Organize your transcriptions into meaningful projects
             </p>
           </div>
-          
-          <div className="flex items-center gap-3">
-            {selectedProjects.length > 0 && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center gap-2 bg-gray-800/50 rounded-lg px-4 py-2"
-              >
-                <span className="text-white text-sm">{selectedProjects.length} selected</span>
-                <button className="p-1 hover:bg-gray-700/50 rounded">
-                  <Share2 className="h-4 w-4 text-gray-400" />
-                </button>
-                <button className="p-1 hover:bg-gray-700/50 rounded">
-                  <Archive className="h-4 w-4 text-gray-400" />
-                </button>
-                <button className="p-1 hover:bg-gray-700/50 rounded">
-                  <Trash2 className="h-4 w-4 text-red-400" />
-                </button>
-              </motion.div>
-            )}
-            
-            <button 
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105"
-            >
-              <FolderPlus className="h-5 w-5" />
-              New Project
-            </button>
-          </div>
+          <motion.button
+            onClick={openCreateModal}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-200"
+          >
+            <Plus className="h-5 w-5" />
+            New Project
+          </motion.button>
         </div>
 
-        {/* Search and Filters */}
+        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-2 relative">
+          <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50">
+            <div className="text-2xl font-bold text-white">{projects.length}</div>
+            <div className="text-gray-400 text-sm">Total Projects</div>
+          </div>
+          <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50">
+            <div className="text-2xl font-bold text-blue-400">
+              {projects.reduce((sum, p) => sum + p.transcriptionCount, 0)}
+            </div>
+            <div className="text-gray-400 text-sm">Total Transcriptions</div>
+          </div>
+          <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50">
+            <div className="text-2xl font-bold text-green-400">
+              {formatDuration(projects.reduce((sum, p) => sum + p.totalDuration, 0))}
+            </div>
+            <div className="text-gray-400 text-sm">Total Duration</div>
+          </div>
+          <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 border border-gray-700/50">
+            <div className="text-2xl font-bold text-purple-400">
+              {projects.filter(p => p.transcriptionCount > 0).length}
+            </div>
+            <div className="text-gray-400 text-sm">Active Projects</div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Search and Controls */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="bg-gray-900/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50 mb-8"
+      >
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Search */}
+          <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
@@ -361,257 +406,421 @@ const ProjectsPage = () => {
               className="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder-gray-400 focus:border-gray-600/50 focus:outline-none"
             />
           </div>
-          
-          <select 
-            value={filterBy}
-            onChange={(e) => setFilterBy(e.target.value)}
-            className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white focus:border-gray-600/50 focus:outline-none"
-          >
-            <option value="all">All Projects</option>
-            <option value="starred">Starred</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="paused">Paused</option>
-          </select>
 
-          <select 
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white focus:border-gray-600/50 focus:outline-none"
-          >
-            <option value="recent">Most Recent</option>
-            <option value="name">By Name</option>
-            <option value="transcriptions">By Transcriptions</option>
-            <option value="progress">By Progress</option>
-          </select>
-        </div>
-      </motion.div>
+          {/* Controls */}
+          <div className="flex items-center gap-3">
+            {/* Sort */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 text-white focus:border-gray-600/50 focus:outline-none"
+            >
+              <option value="recent">Recent Activity</option>
+              <option value="oldest">Oldest First</option>
+              <option value="name">Name A-Z</option>
+              <option value="transcriptions">Most Transcriptions</option>
+            </select>
 
-      {/* Stats Summary */}
-      <motion.div 
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"
-      >
-        {[
-          { label: 'Total Projects', value: totalStats.projects, icon: Folder, color: 'from-gray-700 to-gray-800' },
-          { label: 'Total Transcriptions', value: totalStats.transcriptions, icon: FileText, color: 'from-purple-500 to-gray-800' },
-          { label: 'Total Duration', value: totalStats.totalTime, icon: Clock, color: 'from-green-500 to-gray-800' },
-          { label: 'Active Projects', value: totalStats.activeProjects, icon: TrendingUp, color: 'from-blue-500 to-gray-800' }
-        ].map((stat, index) => (
-          <motion.div
-            key={index}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 + index * 0.1 }}
-            className="bg-gray-900/50 backdrop-blur-sm rounded-2xl p-6 border border-gray-700/50"
-          >
-            <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-xl flex items-center justify-center mb-4`}>
-              <stat.icon className="h-6 w-6 text-white" />
-            </div>
-            <div className="text-2xl font-bold text-white mb-1">{stat.value}</div>
-            <div className="text-gray-400 text-sm">{stat.label}</div>
-          </motion.div>
-        ))}
-      </motion.div>
-
-      {/* Projects Grid */}
-      <motion.div 
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="bg-gray-900/50 backdrop-blur-sm rounded-2xl border border-gray-700/50"
-      >
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white">
-              {filteredProjects.length} Project{filteredProjects.length !== 1 ? 's' : ''}
-            </h2>
-            
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => setViewMode('grid')}
-                className={cn(
-                  "p-2 rounded-lg transition-colors duration-200",
-                  viewMode === 'grid' ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"
-                )}
-              >
-                <div className="grid grid-cols-2 gap-1 w-4 h-4">
-                  {[...Array(4)].map((_, i) => <div key={i} className="bg-current rounded-sm" />)}
-                </div>
-              </button>
-              <button 
+            {/* View Mode */}
+            <div className="flex items-center bg-gray-800/50 border border-gray-700/50 rounded-xl p-1">
+              <button
                 onClick={() => setViewMode('list')}
                 className={cn(
                   "p-2 rounded-lg transition-colors duration-200",
-                  viewMode === 'list' ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"
+                  viewMode === 'list' 
+                    ? "bg-purple-500 text-white" 
+                    : "text-gray-400 hover:text-white"
                 )}
               >
-                <div className="space-y-1 w-4 h-4">
-                  {[...Array(3)].map((_, i) => <div key={i} className="bg-current h-1 rounded-sm" />)}
-                </div>
+                <List className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={cn(
+                  "p-2 rounded-lg transition-colors duration-200",
+                  viewMode === 'grid' 
+                    ? "bg-purple-500 text-white" 
+                    : "text-gray-400 hover:text-white"
+                )}
+              >
+                <Grid3X3 className="h-4 w-4" />
               </button>
             </div>
           </div>
+        </div>
 
-          <div className={cn(
-            "grid gap-6",
-            viewMode === 'grid' ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
-          )}>
-            <AnimatePresence>
-              {filteredProjects.map((project, index) => (
-                <motion.div
-                  key={project.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ delay: index * 0.1 }}
-                  className={cn(
-                    "group p-6 bg-black/30 rounded-xl border border-gray-700/30 hover:border-gray-600/50 transition-all duration-300 cursor-pointer",
-                    selectedProjects.includes(project.id) && "border-white/30 bg-white/5"
-                  )}
-                  onClick={() => toggleSelection(project.id)}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-start gap-4 flex-1">
-                      <div className="flex items-center gap-3">
-                        <input 
-                          type="checkbox"
-                          checked={selectedProjects.includes(project.id)}
-                          onChange={() => toggleSelection(project.id)}
-                          className="rounded"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        {project.starred && <Star className="h-4 w-4 text-yellow-400 fill-current" />}
-                      </div>
-                      
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className={`w-4 h-4 bg-gradient-to-r ${project.color} rounded-full`} />
-                          <h3 className="text-white font-semibold text-lg group-hover:text-white transition-colors duration-200">
-                            {project.name || project.title || 'Untitled Project'}
-                          </h3>
-                          <div className={cn(
-                            "px-2 py-1 rounded-full text-xs font-semibold",
-                            getStatusColor(project.status)
-                          )}>
-                            {project.status}
-                          </div>
-                        </div>
-                        
-                        <p className="text-gray-400 text-sm leading-relaxed mb-4">
-                          {project.description || 'No description available'}
-                        </p>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div className="text-center">
-                            <div className="text-white font-semibold">{project.transcriptionCount || project.transcription_count || 0}</div>
-                            <div className="text-gray-400 text-xs">Transcriptions</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-white font-semibold">{project.totalDuration || formatDurationFromSeconds(project.total_duration)}</div>
-                            <div className="text-gray-400 text-xs">Duration</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-white font-semibold">{(project.members || project.member_count || []).length || 0}</div>
-                            <div className="text-gray-400 text-xs">Members</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-white font-semibold">{project.progress || 0}%</div>
-                            <div className="text-gray-400 text-xs">Progress</div>
-                          </div>
-                        </div>
-                        
-                        <div className="mb-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-gray-400 text-xs">Project Progress</span>
-                            <span className="text-white text-xs">{project.progress}%</span>
-                          </div>
-                          <div className="w-full bg-gray-700 rounded-full h-2">
-                            <div 
-                              className={`h-2 bg-gradient-to-r ${project.color} rounded-full transition-all duration-500`}
-                              style={{ width: `${project.progress}%` }}
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex -space-x-2">
-                            {project.members.slice(0, 3).map((member, memberIndex) => (
-                              <div 
-                                key={memberIndex}
-                                className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white text-xs border-2 border-gray-800"
-                                title={`${member.name} - ${member.role}`}
-                              >
-                                {member.avatar}
-                              </div>
-                            ))}
-                            {project.members.length > 3 && (
-                              <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center text-white text-xs border-2 border-gray-800">
-                                +{project.members.length - 3}
-                              </div>
+        {/* Bulk Actions */}
+        {selectedItems.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700/50"
+          >
+            <div className="text-white">
+              {selectedItems.size} project(s) selected
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleBulkDelete}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors duration-200"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Selected
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
+
+      {/* Projects List/Grid */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        {filteredProjects.length === 0 ? (
+          <div className="bg-gray-900/50 backdrop-blur-sm rounded-2xl p-12 border border-gray-700/50 text-center">
+            <Folder className="h-16 w-16 text-gray-600 mx-auto mb-6" />
+            <h3 className="text-xl font-bold text-white mb-2">
+              {searchTerm ? 'No projects found' : 'No projects yet'}
+            </h3>
+            <p className="text-gray-400 mb-6">
+              {searchTerm 
+                ? 'Try adjusting your search terms'
+                : 'Create your first project to organize transcriptions!'
+              }
+            </p>
+            {!searchTerm && (
+              <motion.button
+                onClick={openCreateModal}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-all duration-200"
+              >
+                <Plus className="h-5 w-5" />
+                Create First Project
+              </motion.button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Select All */}
+            <div className="flex items-center gap-3 px-2">
+              <button
+                onClick={handleSelectAll}
+                className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors duration-200"
+              >
+                {selectedItems.size === filteredProjects.length ? (
+                  <CheckSquare className="h-4 w-4" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+                Select All ({filteredProjects.length})
+              </button>
+            </div>
+
+            {/* Grid View */}
+            {viewMode === 'grid' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <AnimatePresence>
+                  {filteredProjects.map((project, index) => (
+                    <motion.div
+                      key={project.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3, delay: index * 0.1 }}
+                      className={cn(
+                        "bg-gray-900/50 backdrop-blur-sm rounded-xl p-6 border transition-all duration-200 group",
+                        selectedItems.has(project.id)
+                          ? "border-purple-500/50 bg-purple-500/5"
+                          : "border-gray-700/50 hover:border-gray-600/50"
+                      )}
+                    >
+                      {/* Header */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleSelectItem(project.id)}
+                          >
+                            {selectedItems.has(project.id) ? (
+                              <CheckSquare className="h-5 w-5 text-purple-400" />
+                            ) : (
+                              <Square className="h-5 w-5 text-gray-400 hover:text-white transition-colors duration-200" />
                             )}
-                          </div>
-                          
-                          <div className="text-gray-400 text-xs">
-                            Updated {project.lastUpdated || formatRelativeTime(project.updated_at)}
-                          </div>
+                          </button>
+                          <div 
+                            className="w-4 h-4 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: project.color }}
+                          />
                         </div>
                         
-                        <div className="space-y-2">
-                          <div className="text-gray-400 text-xs mb-1">Recent Activity</div>
-                          {(project.recentTranscriptions || project.recent_transcriptions || []).slice(0, 2).map((transcription, transIndex) => (
-                            <div key={transIndex} className="flex items-center justify-between py-1 px-2 bg-gray-800/30 rounded text-xs">
-                              <span className="text-gray-300">{transcription.title}</span>
-                              <div className="flex items-center gap-2 text-gray-400">
-                                <Clock className="h-3 w-3" />
-                                {transcription.duration || formatDurationFromSeconds(transcription.duration_seconds)}
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          <button 
+                            onClick={() => openEditModal(project)}
+                            className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200"
+                          >
+                            <Edit3 className="h-4 w-4 text-gray-400" />
+                          </button>
+                          <button
+                            onClick={() => handleExportProject(project)}
+                            className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200"
+                          >
+                            <Download className="h-4 w-4 text-gray-400" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteProject(project.id)}
+                            className="p-2 hover:bg-red-500/20 rounded-lg transition-colors duration-200"
+                          >
+                            <Trash2 className="h-4 w-4 text-gray-400 hover:text-red-400" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold text-white mb-2">
+                          {project.name}
+                        </h3>
+                        {project.description && (
+                          <p className="text-gray-400 text-sm line-clamp-2 mb-3">
+                            {project.description}
+                          </p>
+                        )}
+                        
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <div className="text-white font-medium">{project.transcriptionCount}</div>
+                            <div className="text-gray-400">Transcriptions</div>
+                          </div>
+                          <div>
+                            <div className="text-white font-medium">{formatDuration(project.totalDuration)}</div>
+                            <div className="text-gray-400">Duration</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer */}
+                      <div className="pt-4 border-t border-gray-700/50 flex items-center justify-between">
+                        <div className="text-xs text-gray-500">
+                          {formatRelativeTime(project.lastActivity)}
+                        </div>
+                        <button className="text-gray-400 hover:text-white transition-colors duration-200">
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* List View */}
+            {viewMode === 'list' && (
+              <div className="space-y-4">
+                <AnimatePresence>
+                  {filteredProjects.map((project, index) => (
+                    <motion.div
+                      key={project.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3, delay: index * 0.1 }}
+                      className={cn(
+                        "bg-gray-900/50 backdrop-blur-sm rounded-xl p-6 border transition-all duration-200 group",
+                        selectedItems.has(project.id)
+                          ? "border-purple-500/50 bg-purple-500/5"
+                          : "border-gray-700/50 hover:border-gray-600/50"
+                      )}
+                    >
+                      <div className="flex items-center gap-4">
+                        {/* Checkbox */}
+                        <button
+                          onClick={() => handleSelectItem(project.id)}
+                        >
+                          {selectedItems.has(project.id) ? (
+                            <CheckSquare className="h-5 w-5 text-purple-400" />
+                          ) : (
+                            <Square className="h-5 w-5 text-gray-400 hover:text-white transition-colors duration-200" />
+                          )}
+                        </button>
+
+                        {/* Color */}
+                        <div 
+                          className="w-4 h-4 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: project.color }}
+                        />
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="text-lg font-semibold text-white mb-1">
+                                {project.name}
+                              </h3>
+                              {project.description && (
+                                <p className="text-gray-400 text-sm mb-2">
+                                  {project.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-6 text-sm text-gray-400">
+                                <span className="flex items-center gap-1">
+                                  <FileText className="h-3 w-3" />
+                                  {project.transcriptionCount} transcriptions
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {formatDuration(project.totalDuration)}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  {formatRelativeTime(project.lastActivity)}
+                                </span>
                               </div>
                             </div>
-                          ))}
-                          {!(project.recentTranscriptions || project.recent_transcriptions || []).length && (
-                            <div className="text-gray-500 text-xs py-2">No recent activity</div>
-                          )}
-                        </div>
-                        
-                        <div className="flex items-center gap-2 mt-4">
-                          {(project.tags || []).map((tag, tagIndex) => (
-                            <span 
-                              key={tagIndex}
-                              className="px-2 py-1 bg-gray-800/50 text-gray-300 text-xs rounded-md"
-                            >
-                              #{typeof tag === 'string' ? tag : tag.name}
-                            </span>
-                          ))}
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                              <button 
+                                onClick={() => openEditModal(project)}
+                                className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200"
+                              >
+                                <Edit3 className="h-4 w-4 text-gray-400" />
+                              </button>
+                              <button
+                                onClick={() => handleExportProject(project)}
+                                className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200"
+                              >
+                                <Download className="h-4 w-4 text-gray-400" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteProject(project.id)}
+                                className="p-2 hover:bg-red-500/20 rounded-lg transition-colors duration-200"
+                              >
+                                <Trash2 className="h-4 w-4 text-gray-400 hover:text-red-400" />
+                              </button>
+                              <button className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200">
+                                <ChevronRight className="h-4 w-4 text-gray-400" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 ml-4" onClick={(e) => e.stopPropagation()}>
-                      <button className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200 opacity-0 group-hover:opacity-100">
-                        <Eye className="h-4 w-4 text-gray-400" />
-                      </button>
-                      <button className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200 opacity-0 group-hover:opacity-100">
-                        <Edit3 className="h-4 w-4 text-gray-400" />
-                      </button>
-                      <button className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200 opacity-0 group-hover:opacity-100">
-                        <UserPlus className="h-4 w-4 text-gray-400" />
-                      </button>
-                      <button className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200 opacity-0 group-hover:opacity-100">
-                        <Share2 className="h-4 w-4 text-gray-400" />
-                      </button>
-                      <button className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200 opacity-0 group-hover:opacity-100">
-                        <MoreVertical className="h-4 w-4 text-gray-400" />
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </motion.div>
+
+      {/* Create/Edit Modal */}
+      <AnimatePresence>
+        {(showCreateModal || editingProject) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-gray-900 rounded-2xl border border-gray-700/50 p-6 w-full max-w-md"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white">
+                  {editingProject ? 'Edit Project' : 'Create New Project'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setEditingProject(null);
+                    setFormData({ name: '', description: '', color: '#8b5cf6' });
+                  }}
+                  className="p-2 hover:bg-gray-700/50 rounded-lg transition-colors duration-200"
+                >
+                  <X className="h-5 w-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Name */}
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">
+                    Project Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-3 py-2 text-white focus:border-gray-600/50 focus:outline-none"
+                    placeholder="Enter project name..."
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg px-3 py-2 text-white focus:border-gray-600/50 focus:outline-none"
+                    placeholder="Enter project description..."
+                    rows={3}
+                  />
+                </div>
+
+                {/* Color */}
+                <div>
+                  <label className="block text-white text-sm font-medium mb-2">
+                    Color
+                  </label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {projectColors.map(color => (
+                      <button
+                        key={color}
+                        onClick={() => setFormData(prev => ({ ...prev, color }))}
+                        className={cn(
+                          "w-8 h-8 rounded-full border-2 transition-all duration-200",
+                          formData.color === color 
+                            ? "border-white scale-110" 
+                            : "border-gray-600 hover:border-gray-400"
+                        )}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 mt-6 pt-6 border-t border-gray-700/50">
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setEditingProject(null);
+                    setFormData({ name: '', description: '', color: '#8b5cf6' });
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={editingProject ? handleEditProject : handleCreateProject}
+                  disabled={!formData.name.trim()}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:from-gray-700 disabled:to-gray-700 text-white rounded-lg transition-all duration-200 disabled:cursor-not-allowed"
+                >
+                  {editingProject ? 'Update Project' : 'Create Project'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

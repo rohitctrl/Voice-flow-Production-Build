@@ -31,8 +31,15 @@ export const InteractiveDemo = () => {
     try {
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
+      
+      // Debug logging
+      console.log('Demo - Sending audio blob:', {
+        type: audioBlob.type,
+        size: audioBlob.size,
+        name: 'recording.webm'
+      });
 
-      const response = await fetch('/api/transcribe', {
+      const response = await fetch('/api/demo-transcribe', {
         method: 'POST',
         body: formData,
       });
@@ -50,14 +57,7 @@ export const InteractiveDemo = () => {
       return result.text;
     } catch (error) {
       console.error('Transcription error:', error);
-      // Fallback to mock transcription if API fails
-      const sampleTexts = [
-        "This is an amazing voice transcription demo! The accuracy is incredible and the real-time processing is so smooth.",
-        "I'm testing the Voiceflow transcription service. The interface is beautiful and the results are impressively accurate.",
-        "Hello world! This voice-to-text technology is fantastic. I can see this being very useful for meetings and note-taking.",
-        "The AI-powered transcription is working perfectly. This will definitely save me tons of time compared to typing everything out.",
-      ];
-      return sampleTexts[Math.floor(Math.random() * sampleTexts.length)] + " (Demo mode - API key needed for real transcription)";
+      throw error; // Let the calling function handle the error
     }
   };
 
@@ -103,9 +103,16 @@ export const InteractiveDemo = () => {
       setRecordingTime(0);
       setTranscribedText('');
       
-      // Start timer
+      // Start timer with 60 second limit for demo
       timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime(prev => {
+          const newTime = prev + 1;
+          // Auto-stop at 60 seconds for demo
+          if (newTime >= 60) {
+            stopRecording();
+          }
+          return newTime;
+        });
       }, 1000);
       
       // Monitor audio levels
@@ -246,9 +253,17 @@ export const InteractiveDemo = () => {
             </p>
             
             {recordingTime > 0 && (
-              <p className="text-white font-mono text-xl">
-                {formatTime(recordingTime)}
-              </p>
+              <div className="text-center">
+                <p className={cn(
+                  "font-mono text-xl mb-1",
+                  recordingTime >= 50 ? "text-red-400" : "text-white"
+                )}>
+                  {formatTime(recordingTime)}
+                </p>
+                <p className="text-gray-400 text-sm">
+                  {recordingTime >= 50 ? "Demo limit reached soon" : "Demo limit: 1 minute"}
+                </p>
+              </div>
             )}
           </div>
 

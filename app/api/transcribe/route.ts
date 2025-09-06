@@ -2,22 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { transcribeAudioFile, calculateAccuracy, extractSpeakers, formatDuration } from '@/lib/transcription';
 import { createTranscription } from '@/lib/database';
+import { 
+  checkUsageLimit, 
+  incrementUsage, 
+  getUserSubscription, 
+  getSubscriptionTier 
+} from '@/lib/subscription';
 
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    if (!process.env.ASSEMBLYAI_API_KEY) {
-      // Return demo response if no API key
+    
+    // Check if this is a demo request (from the landing page demo component)
+    const url = new URL(request.url);
+    const isDemo = url.searchParams.get('demo') === 'true';
+    
+    // Allow demo mode without authentication, even if API key is present
+    if (isDemo || !session?.user?.id) {
+      const sampleTexts = [
+        "This is an amazing voice transcription demo! The accuracy is incredible and the real-time processing is so smooth.",
+        "I'm testing the Voiceflow transcription service. The interface is beautiful and the results are impressively accurate.",
+        "Hello world! This voice-to-text technology is fantastic. I can see this being very useful for meetings and note-taking.",
+        "The AI-powered transcription is working perfectly. This will definitely save me tons of time compared to typing everything out.",
+      ];
       return NextResponse.json({
-        text: "This is a demo transcription. The audio file was processed successfully with 99.2% accuracy. To use real transcription, configure your AssemblyAI API key in the environment variables.",
+        text: sampleTexts[Math.floor(Math.random() * sampleTexts.length)] + " (Demo mode - Sign in for real transcription)",
         confidence: 99.2,
         words: [],
         language: 'en_us',
@@ -40,13 +50,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size (max 100MB)
-    const maxSize = 100 * 1024 * 1024; // 100MB
-    if (audioFile.size > maxSize) {
+    // Check subscription limits
+    const subscriptionTier = await getSubscriptionTier(session.user.id);
+    const subscription = await getUserSubscription(session.user.id);
+
+    // Check file size limits based on subscription
+    const maxFileSizeMB = subscriptionTier === 'free' ? 25 : 
+                         subscriptionTier === 'pro' ? 500 : 
+                         subscriptionTier === 'enterprise' ? 1000 : 25;
+    
+    const maxFileSize = maxFileSizeMB * 1024 * 1024;
+    if (audioFile.size > maxFileSize) {
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 100MB.' },
+        { 
+          error: `File too large. Your ${subscriptionTier} plan supports files up to ${maxFileSizeMB}MB. ${
+            subscriptionTier === 'free' ? 'Upgrade to Pro for larger files.' : ''
+          }`,
+          upgrade_required: subscriptionTier === 'free'
+        },
         { status: 400 }
       );
+    }
+
+    // Check monthly usage limits for free tier
+    if (subscriptionTier === 'free') {
+      const usageCheck = await checkUsageLimit(session.user.id, 'transcription_hours');
+      
+      if (!usageCheck.canUse) {
+        return NextResponse.json(
+          { 
+            error: `You've reached your monthly limit of ${usageCheck.limit} hours. Upgrade to Pro for unlimited transcriptions.`,
+            upgrade_required: true,
+            current_usage: usageCheck.currentUsage,
+            limit: usageCheck.limit
+          },
+          { status: 429 }
+        );
+      }
     }
 
     // Validate file type
@@ -105,6 +145,12 @@ export async function POST(request: NextRequest) {
     const duration = result.words && result.words.length > 0 
       ? result.words[result.words.length - 1].end / 1000 
       : 0;
+
+    // Track usage for free tier users
+    if (subscriptionTier === 'free' && duration > 0) {
+      const durationHours = duration / 3600; // Convert seconds to hours
+      await incrementUsage(session.user.id, 'transcription_hours', durationHours);
+    }
 
     // Update transcription record with results
     // Note: In a production app, this would be done via a webhook or background job
