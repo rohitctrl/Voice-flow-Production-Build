@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import SessionProviderWrapper from '@/components/providers/session-provider'
 
 export const metadata: Metadata = {
   title: 'Voiceflow - AI-Powered Voice Transcription',
@@ -15,9 +14,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="bg-black" suppressHydrationWarning>
-        <SessionProviderWrapper>
-          {children}
-        </SessionProviderWrapper>
+        {children}
       </body>
     </html>
   )
